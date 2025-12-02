@@ -15,6 +15,7 @@ import {
 import {
   getConnectionsForContact,
   createConnection,
+  updateConnection,
   deleteConnection,
 } from "./connections.js";
 
@@ -61,6 +62,11 @@ export function initUI() {
   document
     .getElementById("form-connection")
     .addEventListener("submit", handleConnectionSubmit);
+
+  // Delete connection button
+  document
+    .getElementById("btn-delete-connection")
+    .addEventListener("click", handleDeleteConnection);
 
   // Image input tabs
   document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -153,6 +159,19 @@ export function initUI() {
     "connection-to-id"
   );
 
+  // Contact modal connection search input
+  setupContactSearchInput(
+    "contact-connection",
+    "contact-connection-dropdown",
+    "contact-connection-id",
+    () => {
+      // Show the relationship label input when a contact is selected
+      document
+        .getElementById("contact-connection-label-group")
+        .classList.remove("hidden");
+    }
+  );
+
   // Import/Export button
   document.getElementById("btn-import-export").addEventListener("click", () => {
     openModal("modal-import-export");
@@ -237,6 +256,14 @@ export function openContactModal(contact = null) {
   document.querySelector('.tab-btn[data-tab="url"]').classList.add("active");
   document.getElementById("tab-url").classList.add("active");
 
+  // Reset connection fields
+  document.getElementById("contact-connection").value = "";
+  document.getElementById("contact-connection-id").value = "";
+  document.getElementById("contact-connection-label").value = "";
+  document
+    .getElementById("contact-connection-label-group")
+    .classList.add("hidden");
+
   if (contact) {
     title.textContent = "Edit Contact";
     document.getElementById("contact-id").value = contact.id;
@@ -244,6 +271,8 @@ export function openContactModal(contact = null) {
     document.getElementById("contact-image-url").value =
       contact.image_url || "";
     document.getElementById("contact-notes").value = contact.notes || "";
+    // Hide connection field when editing (connections are managed separately)
+    document.getElementById("contact-connection-group").classList.add("hidden");
 
     if (contact.image_blob) {
       selectedImageBlob = contact.image_blob;
@@ -262,6 +291,10 @@ export function openContactModal(contact = null) {
   } else {
     title.textContent = "Add Contact";
     document.getElementById("contact-id").value = "";
+    // Show connection field when adding new contact
+    document
+      .getElementById("contact-connection-group")
+      .classList.remove("hidden");
   }
 
   modal.classList.remove("hidden");
@@ -287,10 +320,31 @@ async function handleContactSubmit(e) {
   };
 
   try {
+    let newContact;
     if (id) {
       await updateContact(id, contactData);
     } else {
-      await createContact(contactData);
+      newContact = await createContact(contactData);
+
+      // Create connection if one was selected
+      const connectionToId = document.getElementById(
+        "contact-connection-id"
+      ).value;
+      const connectionLabel = document
+        .getElementById("contact-connection-label")
+        .value.trim();
+
+      if (connectionToId && newContact) {
+        try {
+          await createConnection({
+            fromContactId: newContact.id,
+            toContactId: connectionToId,
+            label: connectionLabel || "connected",
+          });
+        } catch (connError) {
+          console.warn("Could not create connection:", connError.message);
+        }
+      }
     }
 
     closeModal("modal-contact");
@@ -301,18 +355,23 @@ async function handleContactSubmit(e) {
 }
 
 /**
- * Open connection modal
+ * Open connection modal for adding a new connection
  */
 export function openConnectionModal(preselectedFromId = null) {
   const modal = document.getElementById("modal-connection");
   const form = document.getElementById("form-connection");
+  const title = document.getElementById("modal-connection-title");
   const fromInput = document.getElementById("connection-from");
-  const toInput = document.getElementById("connection-to");
+  const deleteBtn = document.getElementById("btn-delete-connection");
 
   form.reset();
-  document.getElementById("connection-id").value = "";
+  title.textContent = "Add Connection";
+  document.getElementById("connection-edit-mode").value = "";
+  document.getElementById("connection-original-from-id").value = "";
+  document.getElementById("connection-original-to-id").value = "";
   document.getElementById("connection-from-id").value = "";
   document.getElementById("connection-to-id").value = "";
+  deleteBtn.classList.add("hidden");
 
   if (preselectedFromId) {
     const contact = getContactById(preselectedFromId);
@@ -326,11 +385,51 @@ export function openConnectionModal(preselectedFromId = null) {
 }
 
 /**
+ * Open connection modal for editing an existing connection
+ */
+export function openEditConnectionModal(fromContactId, toContactId, label) {
+  const modal = document.getElementById("modal-connection");
+  const form = document.getElementById("form-connection");
+  const title = document.getElementById("modal-connection-title");
+  const fromInput = document.getElementById("connection-from");
+  const toInput = document.getElementById("connection-to");
+  const labelInput = document.getElementById("connection-label");
+  const deleteBtn = document.getElementById("btn-delete-connection");
+
+  form.reset();
+  title.textContent = "Edit Connection";
+  document.getElementById("connection-edit-mode").value = "edit";
+  document.getElementById("connection-original-from-id").value = fromContactId;
+  document.getElementById("connection-original-to-id").value = toContactId;
+
+  const fromContact = getContactById(fromContactId);
+  const toContact = getContactById(toContactId);
+
+  if (fromContact) {
+    fromInput.value = fromContact.name;
+    document.getElementById("connection-from-id").value = fromContactId;
+  }
+
+  if (toContact) {
+    toInput.value = toContact.name;
+    document.getElementById("connection-to-id").value = toContactId;
+  }
+
+  labelInput.value = label || "";
+  deleteBtn.classList.remove("hidden");
+
+  modal.classList.remove("hidden");
+}
+
+/**
  * Handle connection form submission
  */
 async function handleConnectionSubmit(e) {
   e.preventDefault();
 
+  const editMode = document.getElementById("connection-edit-mode").value;
+  const originalFromId = document.getElementById("connection-original-from-id").value;
+  const originalToId = document.getElementById("connection-original-to-id").value;
   const fromContactId = document.getElementById("connection-from-id").value;
   const toContactId = document.getElementById("connection-to-id").value;
   const label = document.getElementById("connection-label").value.trim();
@@ -341,11 +440,50 @@ async function handleConnectionSubmit(e) {
   }
 
   try {
-    await createConnection({ fromContactId, toContactId, label });
+    if (editMode === "edit") {
+      // Check if the contacts changed
+      const contactsChanged = originalFromId !== fromContactId || originalToId !== toContactId;
+      
+      if (contactsChanged) {
+        // Delete old connection and create new one
+        await deleteConnection(originalFromId, originalToId);
+        await createConnection({ fromContactId, toContactId, label });
+      } else {
+        // Just update the label
+        await updateConnection(fromContactId, toContactId, { label });
+      }
+    } else {
+      await createConnection({ fromContactId, toContactId, label });
+    }
     closeModal("modal-connection");
     refreshNetwork();
   } catch (error) {
     alert("Error saving connection: " + error.message);
+  }
+}
+
+/**
+ * Handle delete connection button click
+ */
+async function handleDeleteConnection() {
+  const originalFromId = document.getElementById("connection-original-from-id").value;
+  const originalToId = document.getElementById("connection-original-to-id").value;
+
+  if (!originalFromId || !originalToId) return;
+
+  const fromContact = getContactById(originalFromId);
+  const toContact = getContactById(originalToId);
+  const fromName = fromContact ? fromContact.name : "Unknown";
+  const toName = toContact ? toContact.name : "Unknown";
+
+  if (confirm(`Are you sure you want to delete the connection between "${fromName}" and "${toName}"?`)) {
+    try {
+      await deleteConnection(originalFromId, originalToId);
+      closeModal("modal-connection");
+      refreshNetwork();
+    } catch (error) {
+      alert("Error deleting connection: " + error.message);
+    }
   }
 }
 
@@ -365,7 +503,7 @@ export function showContactDetails(contactId) {
       ? connections
           .map(
             (conn) => `
-        <div class="connection-item" data-contact-id="${conn.other_contact_id}">
+        <div class="connection-item" data-contact-id="${conn.other_contact_id}" data-from-id="${contactId}" data-to-id="${conn.other_contact_id}" data-label="${conn.label}">
           <img class="connection-item-image" 
                src="${
                  conn.other_contact_image_blob ||
@@ -378,6 +516,7 @@ export function showContactDetails(contactId) {
             <div class="connection-item-name">${conn.other_contact_name}</div>
             <div class="connection-item-label">${conn.label}</div>
           </div>
+          <button class="btn-edit-connection" title="Edit connection" data-from-id="${contactId}" data-to-id="${conn.other_contact_id}" data-label="${conn.label}">✎</button>
         </div>
       `
           )
@@ -418,10 +557,23 @@ export function showContactDetails(contactId) {
 
   // Add click handlers for connection items
   content.querySelectorAll(".connection-item").forEach((item) => {
-    item.addEventListener("click", () => {
+    item.addEventListener("click", (e) => {
+      // Don't navigate if clicking the edit button
+      if (e.target.classList.contains("btn-edit-connection")) return;
       const id = item.dataset.contactId;
       focusNode(id);
       showContactDetails(id);
+    });
+  });
+
+  // Add click handlers for edit connection buttons
+  content.querySelectorAll(".btn-edit-connection").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const fromId = btn.dataset.fromId;
+      const toId = btn.dataset.toId;
+      const label = btn.dataset.label;
+      openEditConnectionModal(fromId, toId, label);
     });
   });
 
@@ -626,7 +778,12 @@ function getInitials(name) {
 /**
  * Setup a contact search input with dropdown
  */
-function setupContactSearchInput(inputId, dropdownId, hiddenInputId) {
+function setupContactSearchInput(
+  inputId,
+  dropdownId,
+  hiddenInputId,
+  onSelect = null
+) {
   const input = document.getElementById(inputId);
   const dropdown = document.getElementById(dropdownId);
   const hiddenInput = document.getElementById(hiddenInputId);
@@ -636,13 +793,13 @@ function setupContactSearchInput(inputId, dropdownId, hiddenInputId) {
     const query = e.target.value.trim();
     // Clear the hidden input when user types (they need to select from dropdown)
     hiddenInput.value = "";
-    updateContactDropdown(query, dropdown, inputId, hiddenInputId);
+    updateContactDropdown(query, dropdown, inputId, hiddenInputId, onSelect);
     localSelectedIndex = -1;
   });
 
   input.addEventListener("focus", (e) => {
     const query = e.target.value.trim();
-    updateContactDropdown(query, dropdown, inputId, hiddenInputId);
+    updateContactDropdown(query, dropdown, inputId, hiddenInputId, onSelect);
   });
 
   input.addEventListener("keydown", (e) => {
@@ -669,7 +826,8 @@ function setupContactSearchInput(inputId, dropdownId, hiddenInputId) {
           selectedItem.dataset.contactId,
           inputId,
           dropdownId,
-          hiddenInputId
+          hiddenInputId,
+          onSelect
         );
       }
     } else if (e.key === "Escape") {
@@ -682,7 +840,13 @@ function setupContactSearchInput(inputId, dropdownId, hiddenInputId) {
 /**
  * Update contact dropdown for connection inputs
  */
-function updateContactDropdown(query, dropdown, inputId, hiddenInputId) {
+function updateContactDropdown(
+  query,
+  dropdown,
+  inputId,
+  hiddenInputId,
+  onSelect = null
+) {
   const contacts = getAllContacts();
   const matches = query
     ? contacts.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
@@ -719,7 +883,8 @@ function updateContactDropdown(query, dropdown, inputId, hiddenInputId) {
           item.dataset.contactId,
           inputId,
           dropdown.id,
-          hiddenInputId
+          hiddenInputId,
+          onSelect
         );
       });
     });
@@ -731,7 +896,13 @@ function updateContactDropdown(query, dropdown, inputId, hiddenInputId) {
 /**
  * Select a contact for a connection input
  */
-function selectContactForInput(contactId, inputId, dropdownId, hiddenInputId) {
+function selectContactForInput(
+  contactId,
+  inputId,
+  dropdownId,
+  hiddenInputId,
+  onSelect = null
+) {
   const contact = getContactById(contactId);
   if (!contact) return;
 
@@ -742,12 +913,17 @@ function selectContactForInput(contactId, inputId, dropdownId, hiddenInputId) {
   input.value = contact.name;
   hiddenInput.value = contactId;
   dropdown.classList.add("hidden");
+
+  if (onSelect) {
+    onSelect(contact);
+  }
 }
 
 // Expose functions to window for inline handlers
 window.appUI = {
   openContactModal,
   openConnectionModal,
+  openEditConnectionModal,
   getContactById,
   confirmDeleteContact,
 };

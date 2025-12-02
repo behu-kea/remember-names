@@ -110,6 +110,10 @@ body {
   display: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .search-item {
   padding: 0.75rem 1rem;
   cursor: pointer;
@@ -318,6 +322,27 @@ body {
 .connection-item-label {
   font-size: 0.75rem;
   color: var(--color-text-secondary);
+}
+
+.btn-edit-connection {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  opacity: 0;
+}
+
+.connection-item:hover .btn-edit-connection {
+  opacity: 1;
+}
+
+.btn-edit-connection:hover {
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .sidebar-actions {

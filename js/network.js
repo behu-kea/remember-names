@@ -362,6 +362,14 @@ export function focusNode(nodeId) {
 }
 
 /**
+ * Get edge data by edge ID
+ */
+export function getEdgeData(edgeId) {
+  if (!edgesDataSet) return null;
+  return edgesDataSet.get(edgeId);
+}
+
+/**
  * Get the network instance
  */
 export function getNetwork() {

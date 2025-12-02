@@ -3,12 +3,13 @@
  */
 
 import { initDatabase } from "./db.js";
-import { initNetwork, refreshNetwork, resetPositions } from "./network.js";
+import { initNetwork, refreshNetwork, resetPositions, getEdgeData } from "./network.js";
 import {
   initUI,
   showContactDetails,
   showContextMenu,
   hideLoading,
+  openEditConnectionModal,
 } from "./ui.js";
 
 /**
@@ -34,8 +35,10 @@ async function init() {
         showContextMenu(nodeId, event);
       },
       onEdgeClick: (edgeId) => {
-        // Could show edge details or edit modal
-        console.log("Edge clicked:", edgeId);
+        const edge = getEdgeData(edgeId);
+        if (edge) {
+          openEditConnectionModal(edge.from, edge.to, edge.label);
+        }
       },
     });
     console.log("Network initialized");
