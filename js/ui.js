@@ -428,8 +428,12 @@ async function handleConnectionSubmit(e) {
   e.preventDefault();
 
   const editMode = document.getElementById("connection-edit-mode").value;
-  const originalFromId = document.getElementById("connection-original-from-id").value;
-  const originalToId = document.getElementById("connection-original-to-id").value;
+  const originalFromId = document.getElementById(
+    "connection-original-from-id"
+  ).value;
+  const originalToId = document.getElementById(
+    "connection-original-to-id"
+  ).value;
   const fromContactId = document.getElementById("connection-from-id").value;
   const toContactId = document.getElementById("connection-to-id").value;
   const label = document.getElementById("connection-label").value.trim();
@@ -442,8 +446,9 @@ async function handleConnectionSubmit(e) {
   try {
     if (editMode === "edit") {
       // Check if the contacts changed
-      const contactsChanged = originalFromId !== fromContactId || originalToId !== toContactId;
-      
+      const contactsChanged =
+        originalFromId !== fromContactId || originalToId !== toContactId;
+
       if (contactsChanged) {
         // Delete old connection and create new one
         await deleteConnection(originalFromId, originalToId);
@@ -466,8 +471,12 @@ async function handleConnectionSubmit(e) {
  * Handle delete connection button click
  */
 async function handleDeleteConnection() {
-  const originalFromId = document.getElementById("connection-original-from-id").value;
-  const originalToId = document.getElementById("connection-original-to-id").value;
+  const originalFromId = document.getElementById(
+    "connection-original-from-id"
+  ).value;
+  const originalToId = document.getElementById(
+    "connection-original-to-id"
+  ).value;
 
   if (!originalFromId || !originalToId) return;
 
@@ -476,7 +485,11 @@ async function handleDeleteConnection() {
   const fromName = fromContact ? fromContact.name : "Unknown";
   const toName = toContact ? toContact.name : "Unknown";
 
-  if (confirm(`Are you sure you want to delete the connection between "${fromName}" and "${toName}"?`)) {
+  if (
+    confirm(
+      `Are you sure you want to delete the connection between "${fromName}" and "${toName}"?`
+    )
+  ) {
     try {
       await deleteConnection(originalFromId, originalToId);
       closeModal("modal-connection");
@@ -503,7 +516,11 @@ export function showContactDetails(contactId) {
       ? connections
           .map(
             (conn) => `
-        <div class="connection-item" data-contact-id="${conn.other_contact_id}" data-from-id="${contactId}" data-to-id="${conn.other_contact_id}" data-label="${conn.label}">
+        <div class="connection-item" data-contact-id="${
+          conn.other_contact_id
+        }" data-from-id="${contactId}" data-to-id="${
+              conn.other_contact_id
+            }" data-label="${conn.label}">
           <img class="connection-item-image" 
                src="${
                  conn.other_contact_image_blob ||
@@ -516,7 +533,9 @@ export function showContactDetails(contactId) {
             <div class="connection-item-name">${conn.other_contact_name}</div>
             <div class="connection-item-label">${conn.label}</div>
           </div>
-          <button class="btn-edit-connection" title="Edit connection" data-from-id="${contactId}" data-to-id="${conn.other_contact_id}" data-label="${conn.label}">✎</button>
+          <button class="btn-edit-connection" title="Edit connection" data-from-id="${contactId}" data-to-id="${
+              conn.other_contact_id
+            }" data-label="${conn.label}">✎</button>
         </div>
       `
           )
@@ -712,6 +731,15 @@ function updateSearchDropdown(query) {
       .map((contact) => {
         const image = getContactImage(contact);
         const hasImage = contact.image_blob || contact.image_url;
+        
+        // Get a random connection to help distinguish contacts with same name
+        const connections = getConnectionsForContact(contact.id);
+        let connectionHint = "";
+        if (connections.length > 0) {
+          const randomConn = connections[Math.floor(Math.random() * connections.length)];
+          connectionHint = `<span class="search-item-hint">connected to ${randomConn.other_contact_name} (${randomConn.label})</span>`;
+        }
+        
         return `
         <div class="search-item" data-contact-id="${contact.id}">
           ${
@@ -721,7 +749,10 @@ function updateSearchDropdown(query) {
                   contact.name
                 )}</div>`
           }
-          <span class="search-item-name">${contact.name}</span>
+          <div class="search-item-details">
+            <span class="search-item-name">${contact.name}</span>
+            ${connectionHint}
+          </div>
         </div>
       `;
       })
@@ -861,6 +892,15 @@ function updateContactDropdown(
       .map((contact) => {
         const image = getContactImage(contact);
         const hasImage = contact.image_blob || contact.image_url;
+        
+        // Get a random connection to help distinguish contacts with same name
+        const connections = getConnectionsForContact(contact.id);
+        let connectionHint = "";
+        if (connections.length > 0) {
+          const randomConn = connections[Math.floor(Math.random() * connections.length)];
+          connectionHint = `<span class="search-item-hint">connected to ${randomConn.other_contact_name} (${randomConn.label})</span>`;
+        }
+        
         return `
         <div class="search-item" data-contact-id="${contact.id}">
           ${
@@ -870,7 +910,10 @@ function updateContactDropdown(
                   contact.name
                 )}</div>`
           }
-          <span class="search-item-name">${contact.name}</span>
+          <div class="search-item-details">
+            <span class="search-item-name">${contact.name}</span>
+            ${connectionHint}
+          </div>
         </div>
       `;
       })

@@ -3,7 +3,12 @@
  */
 
 import { initDatabase } from "./db.js";
-import { initNetwork, refreshNetwork, resetPositions, getEdgeData } from "./network.js";
+import {
+  initNetwork,
+  refreshNetwork,
+  resetPositions,
+  getEdgeData,
+} from "./network.js";
 import {
   initUI,
   showContactDetails,
